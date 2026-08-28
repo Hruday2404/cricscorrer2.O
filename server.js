@@ -4,7 +4,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const db = require('./database');
-const { calculateDLSTarget, checkFollowOnEligibility, getTestSessionInfo } = require('./dlsEngine');
+const { calculateAdvancedDLS, checkFollowOnEligibility, getTestSessionInfo } = require('./dlsEngine');
 
 const app = express();
 const server = http.createServer(app);
@@ -14,13 +14,20 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Standardize player names to prevent case-sensitive duplication
+function formatPlayerName(name) {
+  if (!name) return '';
+  const trimmed = name.trim();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
 function registerGlobalPlayer(playerName, teamName = '') {
   if (!playerName) return;
-  const clean = playerName.trim();
-  const exists = db.prepare(`SELECT id FROM players WHERE LOWER(name) = LOWER(?)`).get(clean);
+  const cleanName = formatPlayerName(playerName);
+  const exists = db.prepare(`SELECT id FROM players WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))`).get(cleanName);
   if (!exists) {
     const pId = 'P_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    db.prepare(`INSERT INTO players (id, name) VALUES (?, ?)`).run(pId, clean);
+    db.prepare(`INSERT INTO players (id, name) VALUES (?, ?)`).run(pId, cleanName);
   }
 }
 
@@ -29,8 +36,8 @@ function getFullMatchState(matchId) {
   if (!match) return null;
 
   const currentInnings = db.prepare(`SELECT * FROM innings WHERE match_id = ? AND innings_number = ?`).get(matchId, match.current_innings);
-
   const allInningsList = db.prepare(`SELECT * FROM innings WHERE match_id = ? ORDER BY innings_number ASC`).all(matchId);
+  
   const inningsDetails = allInningsList.map(inn => {
     const batsmen = db.prepare(`SELECT * FROM batsmen_stats WHERE match_id = ? AND innings_number = ?`).all(matchId, inn.innings_number);
     const bowlers = db.prepare(`SELECT * FROM bowlers_stats WHERE match_id = ? AND innings_number = ?`).all(matchId, inn.innings_number);
@@ -97,10 +104,13 @@ app.post('/api/matches', (req, res) => {
     const numOvers = matchTypeCategory === 'TEST' ? 9999 : (parseInt(totalOvers) || 20);
     const maxBowlerOvers = matchTypeCategory === 'TEST' ? 999 : Math.max(1, Math.ceil(numOvers / 5));
 
-    (team1Squad || []).forEach(p => registerGlobalPlayer(p, team1));
-    (team2Squad || []).forEach(p => registerGlobalPlayer(p, team2));
+    const cleanT1Squad = (team1Squad || []).map(formatPlayerName);
+    const cleanT2Squad = (team2Squad || []).map(formatPlayerName);
 
-    const insertMatch = db.prepare(`
+    cleanT1Squad.forEach(p => registerGlobalPlayer(p, team1));
+    cleanT2Squad.forEach(p => registerGlobalPlayer(p, team2));
+
+    db.prepare(`
       INSERT INTO matches (
         id, tournament_id, scorer_pin, match_type, match_type_category, format_name, team1, team2, 
         team1_squad, team2_squad, players_count, total_overs, overs_per_day, test_days, 
@@ -108,32 +118,13 @@ app.post('/api/matches', (req, res) => {
         toss_winner, toss_decision, status, current_innings
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertMatch.run(
-      matchId,
-      tournamentId,
-      masterKey,
-      matchType,
-      matchTypeCategory,
+    `).run(
+      matchId, tournamentId, masterKey, matchType, matchTypeCategory,
       formatName || (matchTypeCategory === 'TEST' ? 'Test Match' : `${numOvers}-Over Match`),
-      team1,
-      team2,
-      JSON.stringify(team1Squad || []),
-      JSON.stringify(team2Squad || []),
-      parsedPlayers,
-      numOvers,
-      parseInt(oversPerDay) || 90,
-      parseInt(testDays) || 5,
-      maxBowlerOvers,
-      venue || '',
-      matchDatetime || '',
-      umpires || '',
-      referee || '',
-      tossWinner,
-      tossDecision,
-      status,
-      1
+      team1, team2, JSON.stringify(cleanT1Squad), JSON.stringify(cleanT2Squad),
+      parsedPlayers, numOvers, parseInt(oversPerDay) || 90, parseInt(testDays) || 5,
+      maxBowlerOvers, venue || '', matchDatetime || '', umpires || '', referee || '',
+      tossWinner, tossDecision, status, 1
     );
 
     const battingTeam = tossDecision === 'BAT' ? tossWinner : (tossWinner === team1 ? team2 : team1);
@@ -150,7 +141,7 @@ app.post('/api/matches', (req, res) => {
   }
 });
 
-// 2. TRANSFER SCORING PERMISSION
+// 2. TRANSFER SCORING KEY
 app.post('/api/matches/:id/claim-scorer', (req, res) => {
   const matchId = req.params.id;
   const { newDeviceKey } = req.body;
@@ -163,10 +154,10 @@ app.post('/api/matches/:id/claim-scorer', (req, res) => {
   res.json({ success: true, state });
 });
 
-// 3. PLAYER CAREER PROFILE
+// 3. PLAYER CAREER PROFILE (CASE-INSENSITIVE)
 app.get('/api/players/:name/profile', (req, res) => {
-  const pName = req.params.name.trim();
-  const player = db.prepare(`SELECT * FROM players WHERE LOWER(name) = LOWER(?)`).get(pName) || { name: pName, role: 'All-Rounder' };
+  const pName = formatPlayerName(req.params.name);
+  const player = db.prepare(`SELECT * FROM players WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))`).get(pName) || { name: pName, role: 'All-Rounder' };
 
   const batStats = db.prepare(`
     SELECT 
@@ -181,7 +172,7 @@ app.get('/api/players/:name/profile', (req, res) => {
       SUM(CASE WHEN runs >= 100 THEN 1 ELSE 0 END) as hundreds,
       SUM(CASE WHEN is_out = 0 THEN 1 ELSE 0 END) as not_outs
     FROM batsmen_stats 
-    WHERE LOWER(player_name) = LOWER(?)
+    WHERE LOWER(TRIM(player_name)) = LOWER(TRIM(?))
   `).get(pName);
 
   const bowlStats = db.prepare(`
@@ -195,13 +186,13 @@ app.get('/api/players/:name/profile', (req, res) => {
       SUM(CASE WHEN wickets >= 3 AND wickets < 5 THEN 1 ELSE 0 END) as three_fers,
       SUM(CASE WHEN wickets >= 5 THEN 1 ELSE 0 END) as five_fers
     FROM bowlers_stats 
-    WHERE LOWER(player_name) = LOWER(?)
+    WHERE LOWER(TRIM(player_name)) = LOWER(TRIM(?))
   `).get(pName);
 
   const fieldStats = db.prepare(`
     SELECT SUM(catches) as catches, SUM(runouts) as runouts, SUM(stumpings) as stumpings
     FROM fielders_stats 
-    WHERE LOWER(player_name) = LOWER(?)
+    WHERE LOWER(TRIM(player_name)) = LOWER(TRIM(?))
   `).get(pName);
 
   const recentMatches = db.prepare(`
@@ -209,8 +200,8 @@ app.get('/api/players/:name/profile', (req, res) => {
       COALESCE(bs.runs, 0) as batter_runs, COALESCE(bs.balls, 0) as batter_balls,
       COALESCE(bw.wickets, 0) as bowler_wickets, COALESCE(bw.runs_conceded, 0) as bowler_runs
     FROM matches m
-    LEFT JOIN batsmen_stats bs ON bs.match_id = m.id AND LOWER(bs.player_name) = LOWER(?)
-    LEFT JOIN bowlers_stats bw ON bw.match_id = m.id AND LOWER(bw.player_name) = LOWER(?)
+    LEFT JOIN batsmen_stats bs ON bs.match_id = m.id AND LOWER(TRIM(bs.player_name)) = LOWER(TRIM(?))
+    LEFT JOIN bowlers_stats bw ON bw.match_id = m.id AND LOWER(TRIM(bw.player_name)) = LOWER(TRIM(?))
     WHERE bs.id IS NOT NULL OR bw.id IS NOT NULL
     ORDER BY m.created_at DESC LIMIT 10
   `).all(pName, pName);
@@ -273,10 +264,10 @@ app.post('/api/matches/:id/change-bowler-injury', (req, res) => {
   }
 
   const inn = db.prepare(`SELECT * FROM innings WHERE match_id = ? AND innings_number = ?`).get(matchId, match.current_innings);
-  const cleanBowler = newBowler.trim();
+  const cleanBowler = formatPlayerName(newBowler);
   registerGlobalPlayer(cleanBowler, inn.bowling_team);
 
-  const bStat = db.prepare(`SELECT balls FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND player_name = ?`).get(matchId, match.current_innings, cleanBowler);
+  const bStat = db.prepare(`SELECT balls FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(matchId, match.current_innings, cleanBowler);
   if (bStat && match.match_type_category !== 'TEST') {
     const oversDone = Math.floor(bStat.balls / 6);
     if (oversDone >= match.max_overs_per_bowler) {
@@ -284,7 +275,7 @@ app.post('/api/matches/:id/change-bowler-injury', (req, res) => {
     }
   }
 
-  const exists = db.prepare(`SELECT id FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND player_name = ?`).get(matchId, match.current_innings, cleanBowler);
+  const exists = db.prepare(`SELECT id FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(matchId, match.current_innings, cleanBowler);
   if (!exists) {
     db.prepare(`INSERT INTO bowlers_stats (match_id, innings_number, player_name, team_name) VALUES (?, ?, ?, ?)`).run(matchId, match.current_innings, cleanBowler, inn.bowling_team);
   }
@@ -295,10 +286,10 @@ app.post('/api/matches/:id/change-bowler-injury', (req, res) => {
   res.json(state);
 });
 
-// 5. DELIVERY RECORDING
+// 5. DELIVERY RECORDING (CASE-INSENSITIVE PLAYER MATCHING)
 app.post('/api/matches/:id/delivery', (req, res) => {
   const matchId = req.params.id;
-  const { striker, nonStriker, bowler, runsBatter, extraType, isWicket, wicketType, dismissedPlayer, fielder, newBatsman, deviceKey } = req.body;
+  let { striker, nonStriker, bowler, runsBatter, extraType, isWicket, wicketType, dismissedPlayer, fielder, newBatsman, deviceKey } = req.body;
 
   const match = db.prepare(`SELECT * FROM matches WHERE id = ?`).get(matchId);
   if (!match || match.status === 'COMPLETED') {
@@ -314,6 +305,13 @@ app.post('/api/matches/:id/delivery', (req, res) => {
     return res.status(400).json({ error: `Innings ${match.current_innings} has concluded.` });
   }
 
+  striker = formatPlayerName(striker);
+  nonStriker = formatPlayerName(nonStriker);
+  bowler = formatPlayerName(bowler);
+  newBatsman = formatPlayerName(newBatsman);
+  fielder = formatPlayerName(fielder);
+  dismissedPlayer = formatPlayerName(dismissedPlayer);
+
   let t1Squad = JSON.parse(match.team1_squad || '[]');
   let t2Squad = JSON.parse(match.team2_squad || '[]');
 
@@ -323,13 +321,13 @@ app.post('/api/matches/:id/delivery', (req, res) => {
 
   const validateAndRegisterPlayer = (player, squad, teamName) => {
     if (!player) return null;
-    const clean = player.trim();
-    registerGlobalPlayer(clean, teamName);
-    if (!squad.includes(clean)) {
+    registerGlobalPlayer(player, teamName);
+    const inSquad = squad.some(p => p.toLowerCase().trim() === player.toLowerCase().trim());
+    if (!inSquad) {
       if (squad.length >= match.players_count) {
-        return `Squad Limit Exceeded: ${teamName} already has its allowed ${match.players_count} players (${squad.join(', ')}). Cannot add new player '${clean}'.`;
+        return `Squad Limit Exceeded: ${teamName} already has ${match.players_count} players. Cannot add '${player}'.`;
       }
-      squad.push(clean);
+      squad.push(player);
     }
     return null;
   };
@@ -357,11 +355,11 @@ app.post('/api/matches/:id/delivery', (req, res) => {
 
   db.prepare(`UPDATE matches SET team1_squad = ?, team2_squad = ? WHERE id = ?`).run(JSON.stringify(t1Squad), JSON.stringify(t2Squad), matchId);
 
-  if (inn.balls === 0 && inn.overs > 0 && match.last_bowler && match.last_bowler === bowler) {
+  if (inn.balls === 0 && inn.overs > 0 && match.last_bowler && match.last_bowler.toLowerCase().trim() === bowler.toLowerCase().trim()) {
     return res.status(400).json({ error: `Rule Violation: ${bowler} bowled the previous over. Bowlers cannot bowl consecutive overs.` });
   }
 
-  const bStat = db.prepare(`SELECT balls FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND player_name = ?`).get(matchId, match.current_innings, bowler);
+  const bStat = db.prepare(`SELECT balls FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(matchId, match.current_innings, bowler);
   if (bStat && match.match_type_category !== 'TEST') {
     const oversDone = Math.floor(bStat.balls / 6);
     if (oversDone >= match.max_overs_per_bowler) {
@@ -395,7 +393,7 @@ app.post('/api/matches/:id/delivery', (req, res) => {
 
   const initBatter = (name) => {
     if (!name) return;
-    const exists = db.prepare(`SELECT id FROM batsmen_stats WHERE match_id = ? AND innings_number = ? AND player_name = ?`).get(matchId, match.current_innings, name);
+    const exists = db.prepare(`SELECT id FROM batsmen_stats WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(matchId, match.current_innings, name);
     if (!exists) db.prepare(`INSERT INTO batsmen_stats (match_id, innings_number, player_name, team_name) VALUES (?, ?, ?, ?)`).run(matchId, match.current_innings, name, inn.batting_team);
   };
   initBatter(striker);
@@ -403,7 +401,7 @@ app.post('/api/matches/:id/delivery', (req, res) => {
 
   const initBowler = (name) => {
     if (!name) return;
-    const exists = db.prepare(`SELECT id FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND player_name = ?`).get(matchId, match.current_innings, name);
+    const exists = db.prepare(`SELECT id FROM bowlers_stats WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(matchId, match.current_innings, name);
     if (!exists) db.prepare(`INSERT INTO bowlers_stats (match_id, innings_number, player_name, team_name) VALUES (?, ?, ?, ?)`).run(matchId, match.current_innings, name, inn.bowling_team);
   };
   initBowler(bowler);
@@ -414,7 +412,7 @@ app.post('/api/matches/:id/delivery', (req, res) => {
     db.prepare(`
       UPDATE batsmen_stats 
       SET runs = runs + ?, balls = balls + 1, fours = fours + ?, sixes = sixes + ?
-      WHERE match_id = ? AND innings_number = ? AND player_name = ?
+      WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))
     `).run(effectiveBatterRuns, isFour, isSix, matchId, match.current_innings, striker);
   }
 
@@ -423,15 +421,15 @@ app.post('/api/matches/:id/delivery', (req, res) => {
   db.prepare(`
     UPDATE bowlers_stats 
     SET runs_conceded = runs_conceded + ?, balls = balls + ?, wickets = wickets + ?
-    WHERE match_id = ? AND innings_number = ? AND player_name = ?
+    WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))
   `).run(bowlerConceded, isLegal ? 1 : 0, isBowlerWicket ? 1 : 0, matchId, match.current_innings, bowler);
 
   if (isWicket && fielder) {
-    const exists = db.prepare(`SELECT id FROM fielders_stats WHERE match_id = ? AND player_name = ?`).get(matchId, fielder);
+    const exists = db.prepare(`SELECT id FROM fielders_stats WHERE match_id = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(matchId, fielder);
     if (!exists) db.prepare(`INSERT INTO fielders_stats (match_id, player_name) VALUES (?, ?)`).run(matchId, fielder);
-    if (wicketType === 'Caught') db.prepare(`UPDATE fielders_stats SET catches = catches + 1 WHERE match_id = ? AND player_name = ?`).run(matchId, fielder);
-    else if (wicketType === 'Run Out') db.prepare(`UPDATE fielders_stats SET runouts = runouts + 1 WHERE match_id = ? AND player_name = ?`).run(matchId, fielder);
-    else if (wicketType === 'Stumped') db.prepare(`UPDATE fielders_stats SET stumpings = stumpings + 1 WHERE match_id = ? AND player_name = ?`).run(matchId, fielder);
+    if (wicketType === 'Caught') db.prepare(`UPDATE fielders_stats SET catches = catches + 1 WHERE match_id = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).run(matchId, fielder);
+    else if (wicketType === 'Run Out') db.prepare(`UPDATE fielders_stats SET runouts = runouts + 1 WHERE match_id = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).run(matchId, fielder);
+    else if (wicketType === 'Stumped') db.prepare(`UPDATE fielders_stats SET stumpings = stumpings + 1 WHERE match_id = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).run(matchId, fielder);
   }
 
   let nextBalls = inn.balls + (isLegal ? 1 : 0);
@@ -458,11 +456,7 @@ app.post('/api/matches/:id/delivery', (req, res) => {
   const updatedWickets = inn.wickets + (isWicket ? 1 : 0);
   const updatedRuns = inn.total_runs + totalBallRuns;
 
-  db.prepare(`
-    UPDATE innings 
-    SET total_runs = ?, wickets = ?, overs = ?, balls = ?
-    WHERE id = ?
-  `).run(updatedRuns, updatedWickets, nextOvers, nextBalls, inn.id);
+  db.prepare(`UPDATE innings SET total_runs = ?, wickets = ?, overs = ?, balls = ? WHERE id = ?`).run(updatedRuns, updatedWickets, nextOvers, nextBalls, inn.id);
 
   if (isWicket) {
     const outGuy = dismissedPlayer || striker;
@@ -474,7 +468,7 @@ app.post('/api/matches/:id/delivery', (req, res) => {
     else if (wicketType === 'Stumped') dismissalText = `st ${fielder || 'wk'} b ${bowler}`;
     else if (wicketType === 'Hit Wicket') dismissalText = `hit wicket b ${bowler}`;
 
-    db.prepare(`UPDATE batsmen_stats SET is_out = 1, dismissal_info = ? WHERE match_id = ? AND innings_number = ? AND player_name = ?`)
+    db.prepare(`UPDATE batsmen_stats SET is_out = 1, dismissal_info = ? WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`)
       .run(dismissalText, matchId, match.current_innings, outGuy);
     if (newBatsman) initBatter(newBatsman);
   }
@@ -492,7 +486,6 @@ app.post('/api/matches/:id/delivery', (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(matchId, match.current_innings, inn.overs, isLegal ? (inn.balls + 1) : inn.balls, striker, nonStriker, bowler, effectiveBatterRuns, extraRuns, extraType || null, isWicket ? 1 : 0, wicketType || null, dismissedPlayer || null, fielder || null, match.is_free_hit, striker, nonStriker, commentary);
 
-  // Auto Strike Rotation
   let curStriker = isWicket ? (newBatsman || striker) : striker;
   let curNonStriker = nonStriker;
 
@@ -543,28 +536,49 @@ app.post('/api/matches/:id/delivery', (req, res) => {
   res.json(state);
 });
 
-// 6. DLS INTERRUPTION API
+// 6. DLS METHOD INTERRUPTION API (HOLISTIC INNINGS 1 & 2 MATCH CONDITION JUDGMENT)
 app.post('/api/matches/:id/dls', (req, res) => {
   const matchId = req.params.id;
-  const { oversLost, wicketsAtStoppage, deviceKey } = req.body;
+  const { interruptedInnings = 2, revisedTotalOvers, deviceKey } = req.body;
 
   const match = db.prepare(`SELECT * FROM matches WHERE id = ?`).get(matchId);
   if (!match || !isDeviceMasterScorer(match, deviceKey)) {
     return res.status(403).json({ error: "Unauthorized: Only official scorer device can apply DLS." });
   }
 
-  const firstInn = db.prepare(`SELECT total_runs FROM innings WHERE match_id = ? AND innings_number = 1`).get(matchId);
-  const currentInn = db.prepare(`SELECT * FROM innings WHERE match_id = ? AND innings_number = ?`).get(matchId, match.current_innings);
+  const inn1 = db.prepare(`SELECT * FROM innings WHERE match_id = ? AND innings_number = 1`).get(matchId);
+  const inn2 = db.prepare(`SELECT * FROM innings WHERE match_id = ? AND innings_number = 2`).get(matchId);
 
-  const team1Score = firstInn ? firstInn.total_runs : (currentInn ? currentInn.total_runs : 150);
-  const target = calculateDLSTarget(team1Score, match.total_overs, parseInt(oversLost) || 0, parseInt(wicketsAtStoppage) || 0);
+  const t1Runs = inn1 ? inn1.total_runs : 0;
+  const t1Overs = inn1 ? inn1.overs : match.total_overs;
+  const t1Wkts = inn1 ? inn1.wickets : 0;
 
-  db.prepare(`UPDATE matches SET dls_applied = 1, revised_target = ? WHERE id = ?`).run(target, matchId);
-  db.prepare(`UPDATE innings SET target = ? WHERE match_id = ? AND innings_number = 2`).run(target, matchId);
+  const t2CurOvers = inn2 ? inn2.overs : 0;
+  const t2CurWkts = inn2 ? inn2.wickets : 0;
+
+  const dlsResult = calculateAdvancedDLS({
+    interruptedInnings: parseInt(interruptedInnings) || match.current_innings,
+    totalOvers: match.total_overs,
+    team1FinalRuns: t1Runs,
+    team1OversBatted: t1Overs,
+    team1WicketsLost: t1Wkts,
+    team2RevisedOvers: parseInt(revisedTotalOvers) || match.total_overs,
+    team2CurrentOvers: t2CurOvers,
+    team2CurrentWickets: t2CurWkts
+  });
+
+  const finalTarget = dlsResult.target;
+
+  // Persist DLS state to DB
+  db.prepare(`UPDATE matches SET dls_applied = 1, revised_target = ?, total_overs = ? WHERE id = ?`).run(finalTarget, parseInt(revisedTotalOvers) || match.total_overs, matchId);
+  
+  if (inn2) {
+    db.prepare(`UPDATE innings SET target = ? WHERE id = ?`).run(finalTarget, inn2.id);
+  }
 
   const state = getFullMatchState(matchId);
   io.emit(`match_${matchId}`, state);
-  res.json({ target, state });
+  res.json({ target: finalTarget, dlsResult, state });
 });
 
 // 7. UNDO LAST DELIVERY
@@ -603,11 +617,8 @@ app.post('/api/matches/:id/undo', (req, res) => {
   if (lastBall.extra_type === 'BYE') db.prepare(`UPDATE innings SET extras_byes = extras_byes - ? WHERE id = ?`).run(lastBall.extra_runs, inn.id);
   if (lastBall.extra_type === 'LEG_BYE') db.prepare(`UPDATE innings SET extras_legbyes = extras_legbyes - ? WHERE id = ?`).run(lastBall.extra_runs, inn.id);
 
-  db.prepare(`
-    UPDATE innings 
-    SET total_runs = total_runs - ?, wickets = wickets - ?, overs = ?, balls = ?
-    WHERE id = ?
-  `).run(totalRunsRevert, lastBall.is_wicket ? 1 : 0, prevOvers, prevBalls, inn.id);
+  db.prepare(`UPDATE innings SET total_runs = total_runs - ?, wickets = wickets - ?, overs = ?, balls = ? WHERE id = ?`)
+    .run(totalRunsRevert, lastBall.is_wicket ? 1 : 0, prevOvers, prevBalls, inn.id);
 
   if (lastBall.extra_type !== 'WIDE') {
     const isFour = lastBall.runs_batter === 4 ? 1 : 0;
@@ -615,13 +626,13 @@ app.post('/api/matches/:id/undo', (req, res) => {
     db.prepare(`
       UPDATE batsmen_stats 
       SET runs = runs - ?, balls = balls - 1, fours = fours - ?, sixes = sixes - ?
-      WHERE match_id = ? AND innings_number = ? AND player_name = ?
+      WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))
     `).run(lastBall.runs_batter, isFour, isSix, matchId, match.current_innings, lastBall.striker);
   }
 
   if (lastBall.is_wicket) {
     const outGuy = lastBall.dismissed_player || lastBall.striker;
-    db.prepare(`UPDATE batsmen_stats SET is_out = 0, dismissal_info = '' WHERE match_id = ? AND innings_number = ? AND player_name = ?`)
+    db.prepare(`UPDATE batsmen_stats SET is_out = 0, dismissal_info = '' WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`)
       .run(matchId, match.current_innings, outGuy);
   }
 
@@ -630,7 +641,7 @@ app.post('/api/matches/:id/undo', (req, res) => {
   db.prepare(`
     UPDATE bowlers_stats 
     SET runs_conceded = runs_conceded - ?, balls = balls - ?, wickets = wickets - ?
-    WHERE match_id = ? AND innings_number = ? AND player_name = ?
+    WHERE match_id = ? AND innings_number = ? AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))
   `).run(bowlerConcededRevert, isLegal ? 1 : 0, isBowlerWicket ? 1 : 0, matchId, match.current_innings, lastBall.bowler);
 
   db.prepare(`DELETE FROM deliveries WHERE id = ?`).run(lastBall.id);
@@ -661,7 +672,7 @@ app.post('/api/matches/:id/end-innings', (req, res) => {
   if (match.current_innings === 1) {
     const nextBatting = currentInn.bowling_team;
     const nextBowling = currentInn.batting_team;
-    const target = match.match_type_category === 'TEST' ? null : (currentInn.total_runs + 1);
+    const target = match.match_type_category === 'TEST' ? null : (match.revised_target || (currentInn.total_runs + 1));
 
     let deducted = 0;
     if (match.match_type_category === 'TEST') {
@@ -703,12 +714,13 @@ app.post('/api/matches/:id/end-innings', (req, res) => {
     if (match.match_type_category !== 'TEST') {
       const inn1 = db.prepare(`SELECT * FROM innings WHERE match_id = ? AND innings_number = 1`).get(matchId);
       const inn2 = currentInn;
-      if (inn2.total_runs >= inn2.target) {
+      const targetToBeat = match.revised_target || inn2.target || (inn1.total_runs + 1);
+      if (inn2.total_runs >= targetToBeat) {
         winner = inn2.batting_team;
-        resultDesc = `${inn2.batting_team} won by ${match.players_count - 1 - inn2.wickets} wickets`;
+        resultDesc = `${inn2.batting_team} won by ${match.players_count - 1 - inn2.wickets} wickets (DLS Method)`;
       } else if (inn1.total_runs > inn2.total_runs) {
         winner = inn1.batting_team;
-        resultDesc = `${inn1.batting_team} won by ${inn1.total_runs - inn2.total_runs} runs`;
+        resultDesc = `${inn1.batting_team} won by ${targetToBeat - 1 - inn2.total_runs} runs (DLS Method)`;
       } else {
         resultDesc = "Match Tied";
       }
@@ -781,15 +793,7 @@ app.get('/api/tournaments/:id', (req, res) => {
     const againstRate = oversAgainst > 0 ? (runsAgainst / oversAgainst) : 0;
     const nrr = (forRate - againstRate).toFixed(3);
 
-    return {
-      team,
-      played,
-      won,
-      lost,
-      tied,
-      points,
-      nrr: (nrr > 0 ? `+${nrr}` : `${nrr}`)
-    };
+    return { team, played, won, lost, tied, points, nrr: (nrr > 0 ? `+${nrr}` : `${nrr}`) };
   }).sort((a, b) => b.points - a.points || parseFloat(b.nrr) - parseFloat(a.nrr));
 
   res.json({ tournament: tourney, standings, matches });
@@ -810,7 +814,7 @@ app.get('/api/tournaments/:id/stats', (req, res) => {
     ROUND((CAST(SUM(runs) AS REAL) / NULLIF(SUM(balls), 0)) * 100, 2) as strike_rate
     FROM batsmen_stats
     WHERE match_id IN (${placeholders})
-    GROUP BY player_name, team_name
+    GROUP BY LOWER(TRIM(player_name)), team_name
     ORDER BY total_runs DESC LIMIT 10
   `).all(...matchIds);
 
@@ -819,7 +823,7 @@ app.get('/api/tournaments/:id/stats', (req, res) => {
     ROUND((CAST(SUM(runs_conceded) AS REAL) / NULLIF(SUM(balls), 0)) * 6, 2) as economy
     FROM bowlers_stats
     WHERE match_id IN (${placeholders})
-    GROUP BY player_name, team_name
+    GROUP BY LOWER(TRIM(player_name)), team_name
     ORDER BY total_wickets DESC LIMIT 10
   `).all(...matchIds);
 
@@ -831,22 +835,16 @@ app.get('/api/tournaments/:id/stats', (req, res) => {
 
   const mvpList = allPlayers.map(p => {
     const pName = p.player_name;
-    const b = db.prepare(`SELECT SUM(runs) as r FROM batsmen_stats WHERE match_id IN (${placeholders}) AND player_name = ?`).get(...matchIds, pName);
-    const bw = db.prepare(`SELECT SUM(wickets) as w FROM bowlers_stats WHERE match_id IN (${placeholders}) AND player_name = ?`).get(...matchIds, pName);
-    const f = db.prepare(`SELECT SUM(catches) as c, SUM(runouts) as ro FROM fielders_stats WHERE match_id IN (${placeholders}) AND player_name = ?`).get(...matchIds, pName);
+    const b = db.prepare(`SELECT SUM(runs) as r FROM batsmen_stats WHERE match_id IN (${placeholders}) AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(...matchIds, pName);
+    const bw = db.prepare(`SELECT SUM(wickets) as w FROM bowlers_stats WHERE match_id IN (${placeholders}) AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(...matchIds, pName);
+    const f = db.prepare(`SELECT SUM(catches) as c, SUM(runouts) as ro FROM fielders_stats WHERE match_id IN (${placeholders}) AND LOWER(TRIM(player_name)) = LOWER(TRIM(?))`).get(...matchIds, pName);
 
     const runs = b?.r || 0;
     const wickets = bw?.w || 0;
     const fieldPts = ((f?.c || 0) + (f?.ro || 0)) * 10;
     const mvpPoints = runs + (wickets * 25) + fieldPts;
 
-    return {
-      player_name: pName,
-      runs,
-      wickets,
-      fielding: (f?.c || 0) + (f?.ro || 0),
-      mvpPoints
-    };
+    return { player_name: pName, runs, wickets, fielding: (f?.c || 0) + (f?.ro || 0), mvpPoints };
   }).sort((a, b) => b.mvpPoints - a.mvpPoints).slice(0, 10);
 
   res.json({ topBatsmen, topBowlers, mvpList });
