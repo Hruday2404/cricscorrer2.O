@@ -1,0 +1,179 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
+
+/* --- THEME VARIABLES --- */
+:root[data-theme="dark"] {
+  --bg-page: #060913;
+  --bg-card: rgba(17, 24, 39, 0.75);
+  --bg-inner: rgba(30, 41, 59, 0.6);
+  --bg-input: #0b1120;
+  --border-main: rgba(255, 255, 255, 0.08);
+  --border-focus: #10b981;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #10b981;
+  --accent-glow: rgba(16, 185, 129, 0.35);
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --badge-live: #ef4444;
+  --card-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-theme="light"] {
+  --bg-page: #f8fafc;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-inner: rgba(241, 245, 249, 0.8);
+  --bg-input: #ffffff;
+  --border-main: rgba(0, 0, 0, 0.08);
+  --border-focus: #059669;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --accent: #059669;
+  --accent-glow: rgba(5, 150, 105, 0.25);
+  --accent-gradient: linear-gradient(135deg, #059669 0%, #047857 100%);
+  --badge-live: #dc2626;
+  --card-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="contrast"] {
+  --bg-page: #000000;
+  --bg-card: #0a0a0a;
+  --bg-inner: #121212;
+  --bg-input: #000000;
+  --border-main: #fbbf24;
+  --border-focus: #f59e0b;
+  --text-main: #ffffff;
+  --text-muted: #fef08a;
+  --accent: #fbbf24;
+  --accent-glow: rgba(251, 191, 36, 0.4);
+  --accent-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --badge-live: #ff0000;
+  --card-shadow: 0 0 25px rgba(251, 191, 36, 0.15);
+}
+
+/* --- BASE STYLES --- */
+* {
+  font-family: 'Outfit', sans-serif;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s ease;
+  min-height: 100vh;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* --- GLASSMORPHISM CARDS --- */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-main);
+  box-shadow: var(--card-shadow);
+  border-radius: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.glass-inner {
+  background: var(--bg-inner);
+  border: 1px solid var(--border-main);
+  border-radius: 0.875rem;
+}
+
+/* --- CUSTOM INPUTS --- */
+.cricket-input {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-main);
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+.cricket-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+/* --- MODERN BUTTONS & HAPTIC PRESS --- */
+.action-btn {
+  background: var(--bg-inner);
+  border: 1px solid var(--border-main);
+  color: var(--text-main);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 6px 15px -3px var(--accent-glow);
+}
+
+.action-btn:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.btn-primary {
+  background: var(--accent-gradient);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 10px 20px -5px var(--accent-glow);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.12);
+  transform: translateY(-2px);
+  box-shadow: 0 15px 25px -5px var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* --- KEYFRAME ANIMATIONS --- */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 30px var(--accent-glow);
+  }
+}
+
+.glow-animation {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes bounceDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  animation: bounceDot 1.4s infinite ease-in-out;
+}
+
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.delivery-card-anim {
+  animation: slideDownFade 0.35s ease-out forwards;
+}

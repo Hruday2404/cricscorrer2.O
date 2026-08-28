@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CricScorer Pro - Multi-Screen Live Suite</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="p-0 m-0 pb-16 flex flex-col min-h-screen">
+
+  <!-- TOP APP NAVIGATION BAR -->
+  <header class="glass-panel rounded-none border-t-0 border-x-0 sticky top-0 z-50 px-4 py-3">
+    <div class="max-w-6xl mx-auto flex justify-between items-center">
+      
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="navigateToScreen('screen-home')">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-xl shadow-lg glow-animation">
+          🏏
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight leading-tight">CRICSCORER <span style="color: var(--accent);">PRO</span></h1>
+          <span class="text-[10px] font-bold uppercase tracking-widest block opacity-70" style="color: var(--text-muted)">ICC & CricHeroes Pro Suite</span>
+        </div>
+      </div>
+
+      <!-- App Screen Navigation Tabs -->
+      <nav class="flex items-center space-x-2">
+        <button type="button" onclick="navigateToScreen('screen-home')" id="nav-home" class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all bg-emerald-600 text-white shadow">
+          🏠 Home
+        </button>
+        <button type="button" onclick="navigateToScreen('screen-tournaments')" id="nav-tournaments" class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all glass-inner text-gray-400 hover:text-white">
+          🏆 Tournaments
+        </button>
+        <button type="button" onclick="navigateToScreen('screen-recent')" id="nav-recent" class="px-3.5 py-2 rounded-xl text-xs font-bold transition-all glass-inner text-gray-400 hover:text-white">
+          📜 Recent Matches
+        </button>
+        <button type="button" onclick="navigateToScreen('screen-setup')" id="nav-setup" class="btn-primary px-3.5 py-2 rounded-xl text-xs font-bold tracking-wide">
+          + Start Match
+        </button>
+
+        <!-- Theme Picker -->
+        <div class="glass-inner p-1 hidden md:flex items-center space-x-1 ml-2">
+          <button type="button" onclick="setTheme('dark')" id="t-dark" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500 text-white">🌙</button>
+          <button type="button" onclick="setTheme('light')" id="t-light" class="px-2.5 py-1 text-xs font-semibold rounded-lg text-gray-400 hover:text-white">☀️</button>
+          <button type="button" onclick="setTheme('contrast')" id="t-contrast" class="px-2.5 py-1 text-xs font-semibold rounded-lg text-gray-400 hover:text-white">⚡</button>
+        </div>
+      </nav>
+
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4 md:p-6 flex-1 w-full space-y-6">
+
+    <!-- SCREEN 1: HOME SCREEN -->
+    <section id="screen-home" class="space-y-6 app-screen">
+      <div class="glass-panel p-8 rounded-2xl relative overflow-hidden bg-gradient-to-r from-gray-900 to-emerald-950 border border-emerald-900/50">
+        <div class="max-w-xl space-y-3">
+          <span class="text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 inline-block">Official Match Centre</span>
+          <h2 class="text-3xl md:text-4xl font-black tracking-tight leading-tight">Manage Tournaments, Leagues & Live Matches Like a Pro</h2>
+          <p class="text-xs text-gray-400">Strict ICC-compliant scoring rules, automated Round-Robin league schedules, Net Run Rate (NRR) standings, and ball-by-ball broadcast streams.</p>
+          <div class="flex gap-3 pt-2">
+            <button onclick="navigateToScreen('screen-setup')" class="btn-primary px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider">+ Start New Match</button>
+            <button onclick="navigateToScreen('screen-tournaments')" class="glass-inner px-5 py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:text-white">🏆 Organize Tournament</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div onclick="navigateToScreen('screen-tournaments')" class="glass-panel p-6 rounded-2xl cursor-pointer hover:border-emerald-500 transition-all space-y-2">
+          <div class="text-3xl">🏆</div>
+          <h3 class="text-lg font-black">Tournament & League Hub</h3>
+          <p class="text-xs text-gray-400">Create multi-team leagues, generate automatic fixtures, track points table with NRR, Orange Cap & MVP.</p>
+        </div>
+
+        <div onclick="navigateToScreen('screen-recent')" class="glass-panel p-6 rounded-2xl cursor-pointer hover:border-emerald-500 transition-all space-y-2">
+          <div class="text-3xl">📜</div>
+          <h3 class="text-lg font-black">Recent Matches & Scorecards</h3>
+          <p class="text-xs text-gray-400">Access completed and live scorecards, player figures, and historical performance breakdowns.</p>
+        </div>
+
+        <div onclick="navigateToScreen('screen-setup')" class="glass-panel p-6 rounded-2xl cursor-pointer hover:border-emerald-500 transition-all space-y-2">
+          <div class="text-3xl">⚡</div>
+          <h3 class="text-lg font-black">Quick Custom Match</h3>
+          <p class="text-xs text-gray-400">Start quick street matches (CricScorer style) or full multi-day Test matches with custom overs.</p>
+        </div>
+      </div>
+
+      <div class="glass-panel p-6 rounded-2xl space-y-4">
+        <div class="flex justify-between items-center border-b pb-3" style="border-color: var(--border-main)">
+          <h3 class="text-sm font-black uppercase tracking-wider text-emerald-400">🔴 Live / Ongoing Matches</h3>
+          <span class="text-xs text-gray-400" id="homeLiveCount">0 Matches</span>
+        </div>
+        <div id="homeLiveList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="text-xs text-gray-500 p-4">No active live matches right now. Click '+ Start Match' above.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: TOURNAMENT STUDIO -->
+    <section id="screen-tournaments" class="space-y-6 app-screen hidden">
+      <div class="glass-panel p-6 rounded-2xl flex flex-wrap justify-between items-center gap-4">
+        <div>
+          <h2 class="text-2xl font-black">🏆 Tournament & League Studio</h2>
+          <p class="text-xs text-gray-400">ICC Points Table with Net Run Rate, Auto-Fixtures, and Official Player Caps</p>
+        </div>
+        <div class="flex gap-3 items-center">
+          <button onclick="createNewTournamentPrompt()" class="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold">+ Create League / Cup</button>
+          <select id="tourneySelector" onchange="fetchTournamentDetails(this.value)" class="cricket-input p-2.5 rounded-xl text-xs font-bold min-w-[200px]"></select>
+        </div>
+      </div>
+
+      <div id="activeTourneyView" class="space-y-6 hidden">
+        <div class="glass-panel p-6 rounded-2xl space-y-4">
+          <div class="flex justify-between items-center border-b pb-3" style="border-color: var(--border-main)">
+            <h3 class="text-sm font-black uppercase tracking-wider text-yellow-400">📊 ICC Standard Points Table</h3>
+            <span class="text-[11px] text-gray-400">Top teams qualify for Knockouts</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm">
+              <thead>
+                <tr class="glass-inner text-[11px] uppercase font-bold text-gray-400 border-b" style="border-color: var(--border-main)">
+                  <th class="p-3">Pos</th>
+                  <th class="p-3">Team</th>
+                  <th class="p-3">P</th>
+                  <th class="p-3">W</th>
+                  <th class="p-3">L</th>
+                  <th class="p-3">T/NR</th>
+                  <th class="p-3">NRR</th>
+                  <th class="p-3 font-black text-yellow-400">Pts</th>
+                </tr>
+              </thead>
+              <tbody id="tourneyStandingsBody" class="divide-y divide-gray-800 mono"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div class="glass-panel p-5 rounded-2xl space-y-3">
+            <div class="flex justify-between items-center border-b pb-2" style="border-color: var(--border-main)">
+              <h4 class="text-xs font-black uppercase tracking-wider text-yellow-400">🧢 Orange Cap (Runs)</h4>
+            </div>
+            <div id="tourneyOrangeCap" class="space-y-2 text-xs"></div>
+          </div>
+
+          <div class="glass-panel p-5 rounded-2xl space-y-3">
+            <div class="flex justify-between items-center border-b pb-2" style="border-color: var(--border-main)">
+              <h4 class="text-xs font-black uppercase tracking-wider text-purple-400">🟣 Purple Cap (Wickets)</h4>
+            </div>
+            <div id="tourneyPurpleCap" class="space-y-2 text-xs"></div>
+          </div>
+
+          <div class="glass-panel p-5 rounded-2xl space-y-3">
+            <div class="flex justify-between items-center border-b pb-2" style="border-color: var(--border-main)">
+              <h4 class="text-xs font-black uppercase tracking-wider text-emerald-400">⭐ Tournament MVP</h4>
+            </div>
+            <div id="tourneyMVP" class="space-y-2 text-xs"></div>
+          </div>
+        </div>
+
+        <div class="glass-panel p-6 rounded-2xl space-y-4">
+          <div class="flex justify-between items-center border-b pb-3" style="border-color: var(--border-main)">
+            <h3 class="text-sm font-black uppercase tracking-wider text-emerald-400">📅 Tournament Fixtures & Schedule</h3>
+          </div>
+          <div id="tourneyFixturesList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 3: RECENT MATCHES SCREEN -->
+    <section id="screen-recent" class="space-y-6 app-screen hidden">
+      <div class="glass-panel p-6 rounded-2xl flex justify-between items-center">
+        <div>
+          <h2 class="text-2xl font-black">📜 Recent Matches & Archive</h2>
+          <p class="text-xs text-gray-400">Review full official scorecards, commentary timelines and match results</p>
+        </div>
+        <button onclick="loadRecentMatchesPortal()" class="btn-primary px-4 py-2 rounded-xl text-xs font-bold">🔄 Refresh</button>
+      </div>
+      <div id="recentMatchesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+    </section>
+
+    <!-- SCREEN 4: MATCH SETUP SCREEN -->
+    <section id="screen-setup" class="glass-panel p-6 md:p-8 rounded-2xl app-screen hidden">
+      <div class="flex justify-between items-center pb-4 mb-6 border-b" style="border-color: var(--border-main)">
+        <div>
+          <h2 class="text-2xl font-black tracking-tight">Create & Schedule Cricket Match</h2>
+          <p class="text-xs text-gray-400">Configure match formats, dynamic squads, and session parameters</p>
+        </div>
+        <span class="text-xs font-bold px-3 py-1 rounded-full glass-inner text-emerald-400">ICC Compliant</span>
+      </div>
+
+      <form id="matchSetupForm" class="space-y-6">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider mb-2" style="color: var(--text-muted)">Scoring Environment</label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 glass-inner p-1.5 rounded-xl">
+            <label class="flex items-center justify-center p-3 rounded-lg text-xs font-semibold cursor-pointer transition-all text-center glass-inner">
+              <input type="radio" name="matchType" value="UNOFFICIAL" checked onchange="toggleOfficialFields()" class="mr-2">
+              <span>⚡ Unofficial Match (Dynamic on-crease entry)</span>
+            </label>
+            <label class="flex items-center justify-center p-3 rounded-lg text-xs font-semibold cursor-pointer transition-all text-center glass-inner">
+              <input type="radio" name="matchType" value="OFFICIAL" onchange="toggleOfficialFields()" class="mr-2">
+              <span>🏆 Official Match (Venue, Umpires & Full Squads)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Format Category</label>
+            <select id="matchTypeCategory" onchange="handleFormatCategoryChange()" class="cricket-input w-full p-3 rounded-xl text-sm font-bold">
+              <option value="LIMITED_OVERS">Limited Overs Match</option>
+              <option value="TEST">Test Match (Multi-Day)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5 text-emerald-400">Custom Format Name</label>
+            <input type="text" id="formatName" value="T20 Championship" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold" required>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5 text-yellow-400">Players per Side</label>
+            <input type="number" id="pCount" value="11" min="2" max="20" class="cricket-input w-full p-3 rounded-xl text-sm font-bold" required>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Team 1 (Host)</label>
+            <input type="text" id="t1" value="India" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold" required>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Team 2 (Visitor)</label>
+            <input type="text" id="t2" value="Australia" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold" required>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Link to Tournament (Optional)</label>
+            <select id="matchTournamentLink" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold">
+              <option value="">-- Standalone Match --</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Toss Winner</label>
+            <input type="text" id="tossWinner" value="India" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold">
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Toss Decision</label>
+            <select id="tossDecision" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold">
+              <option value="BAT" class="text-black">Elected to Bat First</option>
+              <option value="BOWL" class="text-black">Elected to Bowl First</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Limited Overs Conditions -->
+        <div id="limitedOversSection" class="glass-inner p-5 rounded-2xl border border-gray-700 space-y-4">
+          <h4 class="text-xs font-black uppercase tracking-wider text-emerald-400">Limited Overs Conditions</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Overs Per Innings</label>
+              <input type="number" id="totalOvers" value="20" min="1" max="100" oninput="updateBowlerQuota()" class="cricket-input w-full p-3 rounded-xl text-sm font-bold">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Max Overs / Bowler</label>
+              <input type="text" id="bowlerQuotaDisplay" value="4 Overs" disabled class="cricket-input w-full p-3 rounded-xl text-sm font-bold opacity-60 bg-gray-900 cursor-not-allowed">
+            </div>
+          </div>
+        </div>
+
+        <!-- Test Match Conditions -->
+        <div id="testMatchSection" class="hidden glass-inner p-5 rounded-2xl border border-yellow-600/40 bg-yellow-950/10 space-y-4">
+          <div class="flex justify-between items-center">
+            <h4 class="text-xs font-black uppercase tracking-wider text-yellow-400">Test Match Playing Conditions</h4>
+            <span class="text-[10px] font-bold bg-yellow-400 text-black px-2 py-0.5 rounded">Unlimited Overs / Innings</span>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Scheduled Overs / Day</label>
+              <input type="number" id="oversPerDay" value="90" oninput="updateTestBreakdown()" class="cricket-input w-full p-3 rounded-xl text-sm font-bold">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Total Match Days</label>
+              <input type="number" id="testDays" value="5" class="cricket-input w-full p-3 rounded-xl text-sm font-bold">
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-xl bg-black/40 border border-gray-800 text-xs space-y-1">
+            <div class="font-bold text-gray-300">📊 Day Session Breakdown:</div>
+            <div class="text-gray-400 flex flex-wrap gap-4 pt-1" id="sessionBreakdownText"></div>
+            <div class="text-[11px] text-yellow-400/90 pt-1">⚡ <b>ICC Follow-On Rule:</b> 5-Day ($\ge 200$), 3/4-Day ($\ge 150$), 2-Day ($\ge 100$). Prompted at Innings 2 end.</div>
+          </div>
+        </div>
+
+        <!-- Official Match Metadata -->
+        <div id="officialDetailsSection" class="hidden glass-inner p-5 rounded-2xl border border-blue-500/40 space-y-4">
+          <div class="flex items-center space-x-2">
+            <span class="text-blue-400">📍</span>
+            <h4 class="text-xs font-black uppercase tracking-wider text-blue-400">Official Match Venue & Officials Info</h4>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Venue / Stadium</label>
+              <input type="text" id="venue" placeholder="e.g. Wankhede Stadium, Mumbai" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Date & Time</label>
+              <input type="datetime-local" id="matchDatetime" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">On-Field Umpires</label>
+              <input type="text" id="umpires" placeholder="e.g. Richard Kettleborough, Nitin Menon" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5" style="color: var(--text-muted)">Match Referee</label>
+              <input type="text" id="referee" placeholder="e.g. Javagal Srinath" class="cricket-input w-full p-3 rounded-xl text-sm font-semibold">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5 text-emerald-400">Team 1 Squad (Comma separated)</label>
+              <textarea id="t1Squad" class="cricket-input w-full p-3 rounded-xl text-xs font-mono h-20">Rohit, Gill, Kohli, Iyer, Rahul, Hardik, Jadeja, Kuldeep, Shami, Bumrah, Siraj</textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider mb-1.5 text-emerald-400">Team 2 Squad (Comma separated)</label>
+              <textarea id="t2Squad" class="cricket-input w-full p-3 rounded-xl text-xs font-mono h-20">Warner, Head, Smith, Labuschagne, Maxwell, Stoinis, Carey, Cummins, Starc, Zampa, Hazlewood</textarea>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" id="submitMatchBtn" class="btn-primary w-full py-4 rounded-xl font-black text-sm tracking-widest uppercase shadow-xl">
+          Launch Match Engine 🚀
+        </button>
+      </form>
+    </section>
+
+    <!-- SCREEN 5: LIVE MATCH SCORING SCREEN -->
+    <section id="screen-scoring" class="space-y-6 app-screen hidden">
+
+      <!-- Header Action Bar -->
+      <div class="flex justify-between items-center">
+        <div id="tournamentBackBtnBox" class="hidden">
+          <button type="button" onclick="returnToActiveTournament()" class="px-4 py-2 rounded-xl text-xs font-bold glass-inner text-emerald-400 hover:text-white flex items-center space-x-1 border border-emerald-500/40">
+            <span>⬅ Back to Tournament Hub</span>
+          </button>
+        </div>
+        <div id="scorerAuthHeaderBadge" class="ml-auto flex items-center space-x-2"></div>
+      </div>
+
+      <!-- Broadcast Header Score Card -->
+      <div class="glass-panel p-6 md:p-8 relative overflow-hidden">
+        <div class="flex justify-between items-center text-xs pb-3 border-b mb-4" style="border-color: var(--border-main)">
+          <div>
+            <span id="matchHeaderDetails" class="font-extrabold tracking-wider" style="color: var(--accent);"></span>
+            <div id="matchHeaderVenue" class="text-[11px] text-gray-400 mt-0.5 hidden"></div>
+          </div>
+          <span class="flex items-center space-x-2 bg-red-600 text-white text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow">
+            <span class="live-dot"></span>
+            <span>LIVE</span>
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+          <div>
+            <h3 id="currentBattingTeam" class="text-2xl font-black tracking-tight"></h3>
+            <div class="text-6xl font-black mt-2 flex items-baseline tracking-tight mono">
+              <span id="scoreRuns" style="color: var(--accent);">0</span>
+              <span class="text-gray-500 mx-1">/</span>
+              <span id="scoreWickets">0</span>
+              <span class="text-xl font-normal opacity-70 ml-3" style="color: var(--text-muted);">(<span id="scoreOvers">0.0</span> ov)</span>
+            </div>
+            <div id="playersMaxInfo" class="text-xs font-semibold mt-1" style="color: var(--text-muted)"></div>
+            <div id="targetBanner" class="text-xs font-bold text-yellow-400 mt-2 hidden"></div>
+            <div id="testSessionLiveStatus" class="text-xs font-bold text-blue-400 mt-1 hidden"></div>
+            <div id="freeHitBanner" class="text-xs font-black bg-yellow-400 text-black px-3 py-1 rounded-md mt-2 inline-block shadow hidden">⚠️ FREE HIT DELIVERY</div>
+          </div>
+          
+          <div class="flex flex-col md:items-end justify-center space-y-2">
+            <div class="glass-inner px-5 py-3 rounded-2xl text-right">
+              <span class="text-[10px] font-bold uppercase tracking-wider block" style="color: var(--text-muted)">Current Run Rate</span>
+              <span id="scoreCRR" class="text-3xl font-black mono" style="color: var(--accent);">0.00</span>
+            </div>
+            <div id="rrrBox" class="glass-inner px-5 py-3 rounded-2xl text-right hidden">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-yellow-400 block">Req Run Rate</span>
+              <span id="scoreRRR" class="text-2xl font-black text-yellow-400 mono">0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- THIS OVER TIMELINE PILLS -->
+        <div class="mt-6 pt-4 border-t" style="border-color: var(--border-main);">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-[10px] font-black uppercase tracking-wider text-gray-400">This Over (<span id="thisOverNum">0</span>):</span>
+            <span class="text-[11px] font-bold text-emerald-400" id="thisOverSummary">0 runs</span>
+          </div>
+          <div id="thisOverTimeline" class="flex items-center space-x-2 overflow-x-auto pb-1">
+            <span class="text-xs text-gray-500">Over starting...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SPECTATOR READ-ONLY BANNER -->
+      <div id="viewerNotice" class="glass-panel p-5 rounded-2xl hidden border border-blue-600/40 bg-blue-950/20 text-center text-xs text-blue-300">
+        👁️ <b>Live Spectator Mode:</b> You are viewing live ball-by-ball updates from the official scorer device.
+      </div>
+
+      <!-- OFFICIAL SCORER KEYPAD -->
+      <div id="scorerControlPanel" class="glass-panel p-6 space-y-5">
+        <div class="flex flex-wrap justify-between items-center border-b pb-3 gap-2" style="border-color: var(--border-main)">
+          <div class="flex items-center space-x-2">
+            <h4 class="text-xs font-black uppercase tracking-widest text-emerald-400">🟢 Official Scorer Console</h4>
+            <span id="creaseLockBadge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-900/50 text-emerald-300">Ready</span>
+          </div>
+          
+          <div class="flex items-center space-x-2">
+            <button type="button" onclick="triggerInjuryBowlerChange()" class="bg-yellow-700 hover:bg-yellow-600 text-white font-bold text-xs px-3 py-2 rounded-xl transition-all shadow">
+              🚑 Bowler Injured
+            </button>
+            <button type="button" onclick="undoLastDeliveryTrigger()" class="bg-indigo-700 hover:bg-indigo-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow flex items-center space-x-1">
+              <span>↩️ Undo Ball</span>
+            </button>
+            <button type="button" onclick="endInningsTrigger()" class="bg-red-700 hover:bg-red-800 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow">
+              ⚡ End Innings
+            </button>
+          </div>
+        </div>
+
+        <!-- VISUAL CREASE ACTIVE CARDS WITH STRIKE INDICATOR -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          <!-- Striker Card -->
+          <div id="strikerCardBox" class="glass-inner p-3.5 rounded-xl relative border-2 border-emerald-500 shadow-lg bg-emerald-950/20">
+            <div class="flex justify-between items-center mb-1.5">
+              <label class="text-[11px] font-black uppercase tracking-wider" style="color: var(--accent);">🏏 Striker</label>
+              <span id="strikerLiveDot" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white animate-pulse flex items-center space-x-1">
+                <span>●</span><span>ON STRIKE</span>
+              </span>
+            </div>
+            <input type="text" id="strikerInput" placeholder="Enter Striker Name" class="cricket-input w-full p-2.5 rounded-lg text-sm font-bold">
+            <select id="strikerSelect" class="cricket-input w-full p-2.5 rounded-lg text-sm font-bold hidden"></select>
+          </div>
+
+          <!-- Non-Striker Card -->
+          <div id="nonStrikerCardBox" class="glass-inner p-3.5 rounded-xl relative border border-gray-700">
+            <div class="flex justify-between items-center mb-1.5">
+              <label class="text-[11px] font-bold uppercase tracking-wider text-gray-400">🏏 Non-Striker</label>
+              <span id="nonStrikerLiveDot" class="text-[10px] font-semibold text-gray-500 hidden">Off Strike</span>
+            </div>
+            <input type="text" id="nonStrikerInput" placeholder="Enter Non-Striker Name" class="cricket-input w-full p-2.5 rounded-lg text-sm font-bold">
+            <select id="nonStrikerSelect" class="cricket-input w-full p-2.5 rounded-lg text-sm font-bold hidden"></select>
+          </div>
+
+          <!-- Bowler Card -->
+          <div id="bowlerCardBox" class="glass-inner p-3.5 rounded-xl relative border border-red-900/60">
+            <div class="flex justify-between items-center mb-1.5">
+              <label class="text-[11px] font-bold uppercase tracking-wider text-red-400">🎯 Current Bowler</label>
+              <span class="text-[10px] font-bold text-red-400">BOWLING</span>
+            </div>
+            <input type="text" id="bowlerInput" placeholder="Enter Bowler Name" class="cricket-input w-full p-2.5 rounded-lg text-sm font-bold">
+            <select id="bowlerSelect" class="cricket-input w-full p-2.5 rounded-lg text-sm font-bold hidden"></select>
+          </div>
+
+        </div>
+
+        <!-- Run Buttons -->
+        <div class="grid grid-cols-4 sm:grid-cols-7 gap-2.5">
+          <button type="button" onclick="recordBall(0)" class="action-btn font-black text-xl p-4 rounded-xl mono">0</button>
+          <button type="button" onclick="recordBall(1)" class="action-btn font-black text-xl p-4 rounded-xl mono">1</button>
+          <button type="button" onclick="recordBall(2)" class="action-btn font-black text-xl p-4 rounded-xl mono">2</button>
+          <button type="button" onclick="recordBall(3)" class="action-btn font-black text-xl p-4 rounded-xl mono">3</button>
+          <button type="button" onclick="recordBall(4)" class="action-btn bg-blue-600 hover:bg-blue-500 text-white font-black text-xl p-4 rounded-xl mono">4</button>
+          <button type="button" onclick="recordBall(6)" class="action-btn bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xl p-4 rounded-xl mono">6</button>
+          <button type="button" onclick="triggerOutModal()" class="action-btn bg-red-600 hover:bg-red-500 text-white font-black text-xl p-4 rounded-xl">OUT</button>
+        </div>
+
+        <!-- Extras & DLS -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
+          <button type="button" onclick="recordBall(0, 'WIDE')" class="action-btn p-3 rounded-xl text-xs font-bold text-yellow-400">Wide (+1)</button>
+          <button type="button" onclick="recordBall(0, 'NO_BALL')" class="action-btn p-3 rounded-xl text-xs font-bold text-yellow-400">No Ball (+1, Free Hit)</button>
+          <button type="button" onclick="recordBall(1, 'BYE')" class="action-btn p-3 rounded-xl text-xs font-bold text-indigo-400">1 Bye</button>
+          <button type="button" onclick="recordBall(1, 'LEG_BYE')" class="action-btn p-3 rounded-xl text-xs font-bold text-indigo-400">1 Leg Bye</button>
+          <button type="button" onclick="triggerDLSModal()" class="col-span-2 sm:col-span-1 bg-purple-700 hover:bg-purple-600 text-white font-bold p-3 rounded-xl text-xs shadow">🌧️ DLS Interruption</button>
+        </div>
+      </div>
+
+      <!-- Multi-Innings Scorecard & Commentary -->
+      <div class="glass-panel overflow-hidden">
+        <div class="flex border-b glass-inner rounded-none" style="border-color: var(--border-main)">
+          <button type="button" onclick="switchMainTab('tab-scorecard')" id="btn-tab-scorecard" class="px-8 py-4 font-black text-xs tracking-wider border-b-2" style="border-color: var(--accent); color: var(--accent);">FULL SCORECARD</button>
+          <button type="button" onclick="switchMainTab('tab-commentary')" id="btn-tab-commentary" class="px-8 py-4 font-bold text-xs tracking-wider text-gray-400 hover:text-white transition-all">BALL COMMENTARY</button>
+        </div>
+
+        <div id="tab-scorecard" class="p-6 space-y-6">
+          <div class="flex items-center space-x-2 border-b pb-4 overflow-x-auto" style="border-color: var(--border-main);" id="inningsPillContainer"></div>
+
+          <div>
+            <h5 class="text-xs font-black uppercase tracking-wider mb-3" style="color: var(--text-muted)">Batting Scorecard (Click player name for Career Profile)</h5>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr class="glass-inner text-[11px] uppercase font-bold text-gray-400 border-b" style="border-color: var(--border-main)">
+                    <th class="p-3">Batter</th>
+                    <th class="p-3">R</th>
+                    <th class="p-3">B</th>
+                    <th class="p-3">4s</th>
+                    <th class="p-3">6s</th>
+                    <th class="p-3">SR</th>
+                  </tr>
+                </thead>
+                <tbody id="battingTable" class="divide-y divide-gray-800 mono"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h5 class="text-xs font-black uppercase tracking-wider mb-3" style="color: var(--text-muted)">Bowling Figures (Click bowler name for Career Profile)</h5>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr class="glass-inner text-[11px] uppercase font-bold text-gray-400 border-b" style="border-color: var(--border-main)">
+                    <th class="p-3">Bowler</th>
+                    <th class="p-3">O</th>
+                    <th class="p-3">R</th>
+                    <th class="p-3">W</th>
+                    <th class="p-3">Econ</th>
+                  </tr>
+                </thead>
+                <tbody id="bowlingTable" class="divide-y divide-gray-800 mono"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-commentary" class="p-6 hidden space-y-3">
+          <div class="flex justify-between items-center pb-2 border-b" style="border-color: var(--border-main)">
+            <h5 class="text-xs font-black uppercase tracking-wider text-gray-400">Over-by-Over Live Feed (Latest First)</h5>
+            <span class="text-xs font-bold text-emerald-400" id="commCount">0 Deliveries</span>
+          </div>
+          <div id="commList" class="space-y-2.5 max-h-96 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- CRICBUZZ & CRICHEROES STYLE PLAYER PROFILE MODAL -->
+  <div id="playerProfileModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-panel w-full max-w-2xl p-6 md:p-8 rounded-2xl max-h-[90vh] overflow-y-auto space-y-5 border border-emerald-500/30">
+      <div class="flex justify-between items-center border-b pb-4" style="border-color: var(--border-main)">
+        <div class="flex items-center space-x-3">
+          <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-2xl flex items-center justify-center border border-emerald-500/40" id="profileInitial">
+            P
+          </div>
+          <div>
+            <h3 class="text-2xl font-black" id="profilePlayerName">Player Name</h3>
+            <span class="text-xs text-gray-400 uppercase tracking-widest font-semibold" id="profileRole">All-Rounder</span>
+          </div>
+        </div>
+        <button type="button" onclick="closePlayerProfileModal()" class="text-gray-400 hover:text-white font-black text-xl px-2 py-1">✕</button>
+      </div>
+
+      <!-- Batting Career Stats Grid -->
+      <div class="space-y-2">
+        <h4 class="text-xs font-black uppercase tracking-wider text-yellow-400">🏏 Career Batting Stats</h4>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mono" id="profileBattingGrid"></div>
+      </div>
+
+      <!-- Bowling Career Stats Grid -->
+      <div class="space-y-2">
+        <h4 class="text-xs font-black uppercase tracking-wider text-purple-400">🎯 Career Bowling Stats</h4>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mono" id="profileBowlingGrid"></div>
+      </div>
+
+      <!-- Fielding Stats -->
+      <div class="space-y-2">
+        <h4 class="text-xs font-black uppercase tracking-wider text-blue-400">🧤 Career Fielding</h4>
+        <div class="grid grid-cols-3 gap-3 text-center mono" id="profileFieldingGrid"></div>
+      </div>
+
+      <!-- Recent Matches List -->
+      <div class="space-y-2">
+        <h4 class="text-xs font-black uppercase tracking-wider text-emerald-400">📜 Recent Match Performances</h4>
+        <div class="space-y-2 text-xs" id="profileRecentMatchesList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+node_modules/
+cricket.db
+cricket.db-wal
+cricket.db-shm
+.DS_Store
